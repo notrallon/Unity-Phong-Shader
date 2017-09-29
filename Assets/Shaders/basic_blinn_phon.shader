@@ -1,6 +1,6 @@
 ﻿// Upgrade NOTE: replaced '_LightMatrix0' with 'unity_WorldToLight'
 
-Shader "Unlit/BlinnPhongBump"
+Shader "Unlit/basicphong"
 {
 	Properties
 	{
