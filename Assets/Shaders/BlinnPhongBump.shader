@@ -1,10 +1,14 @@
-﻿// Upgrade NOTE: replaced '_LightMatrix0' with 'unity_WorldToLight'
+﻿// Upgrade NOTE: replaced '_Object2World' with 'unity_ObjectToWorld'
+
+// Upgrade NOTE: replaced '_LightMatrix0' with 'unity_WorldToLight'
 
 Shader "Unlit/BlinnPhongBump"
 {
 	Properties
 	{
 		_MainTex("Texture", 2D) = "white" {}
+
+		_BumpMap("Normal map", 2D) = "bump" {}
 
 		_Ambient("Intensity", Range(0.0, 1.0)) = 0.1
 		_AmbientColor("Color", color) = (1.0, 1.0, 1.0, 1.0)
@@ -44,10 +48,14 @@ Shader "Unlit/BlinnPhongBump"
 				float2 uv : TEXCOORD0;
 				float3 worldPos : TEXCOORD1;
 				float3 normal : TEXCOORD2;
+				float3 tangentWorld : TEXCOORD3;
+				float3 binormalWorld : TEXCOORD4;
 			};
 
 			sampler2D _MainTex;
 			//float4 _MainTex_ST;
+			sampler2D _BumpMap;
+			float4 _BumpMap_ST;
 
 			fixed4 _LightColor0;
 
@@ -85,6 +93,17 @@ Shader "Unlit/BlinnPhongBump"
 				// Grab the color of the pixel on screen
 				fixed4 col = tex2D(_MainTex, i.uv);
 
+				float4 encodedNormal = tex2D(_BumpMap, _BumpMap_ST.xy * i.uv.xy + _BumpMap_ST.zw);
+				float3 localCoords = float3(2.0 * encodedNormal.a - 1.0, 2.0 * encodedNormal.g - 1.0, 0.0);
+				localCoords.z = sqrt(1.0 - dot(localCoords, localCoords));
+
+				float3x3 local2WorldTranspose = float3x3(i.tangentWorld, i.binormalWorld, i.normal);
+				float3 normalDir = normalize(mul(localCoords, local2WorldTranspose));
+
+				// normal = worldNormal
+				float3 normal = normalize(mul(localCoords, local2WorldTranspose));
+				//float3 normal = normalize(i.normal);
+
 				// The direction of the lightning
 				float3 lightDir = normalize(_WorldSpaceLightPos0.xyz);
 
@@ -95,7 +114,7 @@ Shader "Unlit/BlinnPhongBump"
 				fixed4 amb = _Ambient * _AmbientColor;
 
 				// normal = worldNormal
-				float3 normal = normalize(i.normal);
+				//float3 normal = normalize(i.normal);
 				float3 worldPos = normalize(i.worldPos.xyz);
 
 				// Compute diffuse ligting
@@ -141,6 +160,7 @@ Shader "Unlit/BlinnPhongBump"
 				float4 vertex : POSITION;
 				float3 normal : NORMAL;
 				float4 texcoord : TEXCOORD0;
+				float4 tangent : TANGENT;
 			};
 
 			struct v2f {
@@ -148,10 +168,14 @@ Shader "Unlit/BlinnPhongBump"
 				float2 uv : TEXCOORD0;
 				float3 worldPos : TEXCOORD1;
 				float3 normal : TEXCOORD2;
+				float3 tangentWorld : TEXCOORD3;
+				float3 binormalWorld : TEXCOORD4;
 			};
 
 			sampler2D _MainTex;
 			//float4 _MainTex_ST;
+			sampler2D _BumpMap;
+			float4 _BumpMap_ST;
 
 			fixed4 _LightColor0;
 
@@ -180,6 +204,9 @@ Shader "Unlit/BlinnPhongBump"
 				// Normal in WorldSpace
 				o.normal = normalize(mul(v.normal, (float3x3)unity_WorldToObject));
 
+				o.tangentWorld = normalize(mul(unity_ObjectToWorld, float4(v.tangent.xyz, 0.0)).xyz);
+				o.binormalWorld = normalize(cross(o.normal, o.tangentWorld) * v.tangent.w);
+
 				o.uv = v.texcoord;
 
 				return o;
@@ -189,8 +216,18 @@ Shader "Unlit/BlinnPhongBump"
 				// Grab the color of the pixel on screen
 				fixed4 col = tex2D(_MainTex, i.uv);
 
+				float4 encodedNormal = tex2D(_BumpMap, _BumpMap_ST.xy * i.uv.xy + _BumpMap_ST.zw);
+				float3 localCoords = float3(2.0 * encodedNormal.a - 1.0, 2.0 * encodedNormal.g - 1.0, 0.0);
+				localCoords.z = sqrt(1.0 - dot(localCoords, localCoords));
+
+				float3x3 local2WorldTranspose = float3x3(i.tangentWorld, i.binormalWorld, i.normal);
+				float3 normalDir = normalize(mul(localCoords, local2WorldTranspose));
+
+				return fixed4(normalDir, 0);
+
 				// normal = worldNormal
-				float3 normal = normalize(i.normal);
+				float3 normal = normalize(mul(localCoords, local2WorldTranspose));
+				//float3 normal = normalize(i.normal);
 				float3 worldPos = normalize(i.worldPos);
 
 				// Camera direction
@@ -207,11 +244,10 @@ Shader "Unlit/BlinnPhongBump"
 
 				lightDir = normalize(pointLightDir) * _WorldSpaceLightPos0.w;
 
-
 				// Compute ambient lighting
 				fixed4 amb = _Ambient * _AmbientColor;// +unity_AmbientSky + UNITY_LIGHTMODEL_AMBIENT;
 
-				float attenuation = 0.5 / pointLightLength / pointLightLength;
+				float attenuation = 1 / pointLightLength;
 
 
 				// Compute diffuse ligting
@@ -228,14 +264,9 @@ Shader "Unlit/BlinnPhongBump"
 				float NdotH = saturate(dot(normal, halfVector));
 				fixed4 spec = pow(NdotH, _Shininess) * _LightColor0 * _SpecColor * attenuation;
 				//fixed4 spec = lerp(pow(NdotH, _Shininess) * _LightColor0 * _SpecColor, pow(NdotH, _Shininess) * _LightColor0 * _SpecColor, _WorldSpaceLightPos0.w);
-
 				light += spec;
 
 				#endif
-
-				//return light;
-				// sample the texture
-				//fixed4 col = tex2D(_MainTex, i.uv);
 
 				col *= light;
 
