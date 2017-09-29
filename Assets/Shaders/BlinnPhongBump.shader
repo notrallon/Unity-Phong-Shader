@@ -36,7 +36,7 @@ Shader "Unlit/BlinnPhongBump"
 			struct appdata {
 				float4 vertex : POSITION;
 				float3 normal : NORMAL;
-				float4 texcoord : TEXCOORD0;
+				float2 texcoord : TEXCOORD0;
 			};
 
 			struct v2f {
@@ -80,6 +80,8 @@ Shader "Unlit/BlinnPhongBump"
 			}
 
 			fixed4 frag(v2f i) : SV_Target{
+				//return fixed4(i.uv.x, i.uv.y, 0, 1);
+
 				// Grab the color of the pixel on screen
 				fixed4 col = tex2D(_MainTex, i.uv);
 
@@ -192,19 +194,18 @@ Shader "Unlit/BlinnPhongBump"
 				float3 worldPos = normalize(i.worldPos);
 
 				// Camera direction
-				float3 viewDir = normalize(normal.xyz - worldPos.xyz);
+				float3 viewDir = normalize(_WorldSpaceCameraPos.xyz - i.worldPos.xyz);
 
 
 				// The direction of the lightning
-				//float3 lightDir = normalize(_WorldSpaceLightPos0.xyz);
+				float3 lightDir = normalize(_WorldSpaceLightPos0.xyz);
 
 			
-
 				// Point light direction
 				float3 pointLightDir = _WorldSpaceLightPos0.xyz - i.worldPos.xyz;
 				float pointLightLength = length(pointLightDir);
 
-				//lightDir = normalize(pointLightDir) * _WorldSpaceLightPos0.w;
+				lightDir = normalize(pointLightDir) * _WorldSpaceLightPos0.w;
 
 
 				// Compute ambient lighting
@@ -214,20 +215,22 @@ Shader "Unlit/BlinnPhongBump"
 
 
 				// Compute diffuse ligting
-				fixed4 NdotL = saturate((dot(normal, pointLightDir)) * _LightColor0);
-				fixed4 diffuseColor = NdotL * _Diffuse * _LightColor0;
+				fixed4 NdotL = saturate((dot(normal, normalize(pointLightDir))) * _LightColor0);
+				fixed4 diffuseColor = NdotL * _Diffuse * _LightColor0 * attenuation;
 				//float3 diffuseColor = lerp(fixed4(0,0,0,0), _LightColor0.rgb * max(0, dot(normal, pointLightDir) * amb * attenuation), sqrt(_WorldSpaceLightPos0.w));
 
 				fixed4 light = diffuseColor * amb * attenuation;//fixed4(normalize(diffuseColor) * amb * attenuation, attenuation);
 
 					// Compute specular light if it's checked
 				#if _SPECULAR_ON
-				float3 halfVector = normalize(pointLightDir);
-				float NdotH = saturate(dot(i.normal, halfVector));
+				
+				float3 halfVector = normalize(pointLightDir + viewDir);
+				float NdotH = saturate(dot(normal, halfVector));
 				fixed4 spec = pow(NdotH, _Shininess) * _LightColor0 * _SpecColor * attenuation;
 				//fixed4 spec = lerp(pow(NdotH, _Shininess) * _LightColor0 * _SpecColor, pow(NdotH, _Shininess) * _LightColor0 * _SpecColor, _WorldSpaceLightPos0.w);
 
 				light += spec;
+
 				#endif
 
 				//return light;
